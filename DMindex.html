@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>デュエルマスターズ 確率シミュレーター</title>
+
+<style>
+body{
+  font-family: sans-serif;
+  color: #e6edf3;
+  padding: 20px;
+  margin: 0;
+
+  /* 背景画像（ここを自分の画像名に変更） */
+  background:
+    linear-gradient(rgba(13,17,23,0.88), rgba(13,17,23,0.88)),
+    url("imag/DMhaikei.png");
+
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+
+input,select,button{
+  padding:6px;
+  margin:4px;
+  font-size:14px;
+}
+
+/* パネル */
+.panel{
+  background: rgba(22,27,34,0.92);
+  padding:16px;
+  border-radius:12px;
+  max-width:600px;
+  margin-bottom:20px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+}
+
+.result{
+  white-space:pre;
+  font-family:monospace;
+  background: rgba(11,15,20,0.95);
+  padding:12px;
+  border-radius:8px;
+}
+
+label{
+  display:inline-block;
+  width:220px;
+}
+
+a{
+  color:#58a6ff;
+  text-decoration:none;
+}
+
+a:hover{
+  text-decoration:underline;
+}
+</style>
+
+</head>
+<body>
+
+<h1>デュエルマスターズ 確率シミュレーター</h1>
+<p>
+  ・出力は <strong>指定ターンまでに目的カードを1枚以上引ける確率</strong> です。（2枚以上でも成功扱い）<br>
+  ・シールド5枚は「引けないカード」として扱われます。
+</p>
+
+<div class="panel">
+  <h2>設定</h2>
+  <div><label>デッキ枚数 (40〜60)</label> <input id="deckSize" type="number" value="40" min="1" /></div>
+  <div><label>採用枚数（目的カードの枚数 T）</label> <input id="targetCount" type="number" value="4" min="0" /></div>
+  <div><label>手札（固定）</label> <input id="handSize" type="number" value="5" disabled /></div>
+  <div><label>シールド（固定）</label> <input id="shield" type="number" value="5" disabled /></div>
+  <div><label>Nターン目までに引ける確率（ターン数）</label> <input id="turns" type="number" value="4" min="1" /></div>
+  <div>
+    <label>先攻 / 後攻</label>
+    <select id="turnOrder">
+      <option value="first">先攻（1ターン目のドローなし）</option>
+      <option value="second">後攻（1ターン目からドローあり）</option>
+    </select>
+  </div>
+  <div><button id="runBtn">計算する</button></div>
+</div>
+
+<div class="panel">
+  <h2>結果</h2>
+  <div class="result" id="result">ここに結果が表示されます</div>
+</div>
+
+<script>
+// nCr（組み合わせ）
+function nCr(n, r){
+  if(r < 0 || r > n) return 0;
+  r = Math.min(r, n - r);
+  let num = 1, den = 1;
+  for(let i = 0; i < r; i++){
+    num *= (n - i);
+    den *= (i + 1);
+  }
+  return num / den;
+}
+
+// デュエマ仕様に基づく計算
+function probabilityDM(deckSize, targetCount, turns, isFirst){
+  const hand = 5;
+
+  if(targetCount <= 0) return 0;
+  if(targetCount > deckSize) return 0;
+
+  let totalProb = 0;
+
+  for(let x = 0; x <= Math.min(5, targetCount); x++){
+    const pShieldX =
+      (nCr(targetCount, x) * nCr(deckSize - targetCount, 5 - x)) /
+      nCr(deckSize, 5);
+
+    const remainingTargets = targetCount - x;
+    const deckAfterShield = deckSize - 5;
+
+    const noHitHand =
+      nCr(deckAfterShield - remainingTargets, hand) /
+      nCr(deckAfterShield, hand);
+
+    const pHitHand = 1 - noHitHand;
+
+    if(pHitHand > 0){
+      totalProb += pShieldX * pHitHand;
+      continue;
+    }
+
+    const draws = isFirst ? Math.max(0, turns - 1) : turns;
+    const deckAfterHand = deckAfterShield - hand;
+
+    const noHitDraw =
+      nCr(deckAfterHand - remainingTargets, draws) /
+      nCr(deckAfterHand, draws);
+
+    const pHitDraw = 1 - noHitDraw;
+
+    totalProb += pShieldX * pHitDraw;
+  }
+
+  return totalProb;
+}
+
+document.getElementById('runBtn').addEventListener('click', function(){
+  const deckSize = Math.floor(+document.getElementById('deckSize').value);
+  const targetCount = Math.floor(+document.getElementById('targetCount').value);
+  const turns = Math.floor(+document.getElementById('turns').value);
+  const isFirst = document.getElementById('turnOrder').value === 'first';
+
+  if(deckSize < 40 || deckSize > 60){
+    result.textContent = 'デッキ枚数は40〜60で入力してください。';
+    return;
+  }
+  if(targetCount > deckSize){
+    result.textContent = '採用枚数がデッキ枚数を超えています。';
+    return;
+  }
+  if(targetCount === 0){
+    result.textContent = '0%（採用なし）';
+    return;
+  }
+
+  const prob = probabilityDM(deckSize, targetCount, turns, isFirst);
+  result.textContent =
+    `▼ ${turns}ターン目までに1枚以上引ける確率\n` +
+    `${(prob * 100).toFixed(4)}%`;
+});
+</script>
+
+<p>
+  <a href="SVindex.html">→ シャドウバース シミュレーターへ</a>
+</p>
+<p>
+  <a href="homeindex.html">→ トップページに戻る</a>
+</p>
+
+</body>
+</html>
